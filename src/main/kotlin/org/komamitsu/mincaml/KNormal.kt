@@ -10,7 +10,7 @@ sealed class KNormal {
     data class Neg(val id: Id) : KNormal()
     data class Add(val left: Id, val right: Id) : KNormal()
     data class Sub(val left: Id, val right: Id) : KNormal()
-    data class FNeg(val left: Id, val right: Id) : KNormal()
+    data class FNeg(val id: Id) : KNormal()
     data class FAdd(val left: Id, val right: Id) : KNormal()
     data class FSub(val left: Id, val right: Id) : KNormal()
     data class FMul(val left: Id, val right: Id) : KNormal()
@@ -27,4 +27,88 @@ sealed class KNormal {
     data class Put(val id: Id, val pos: Id, val value: Id) : KNormal()
     data class ExtArray(val id: Id) : KNormal()
     data class ExtFunApp(val id: Id, val args: List<Id>) : KNormal()
+
+    companion object {
+        private fun insertLet(
+            kNormAndType: Pair<KNormal, Type>,
+            k: (Id) -> Pair<KNormal, Type>
+        ): Pair<KNormal, Type> {
+
+            val kNormal = kNormAndType.first
+            return when (kNormal) {
+                is Var -> k(kNormal.id)
+                else -> {
+                    val type = kNormAndType.second
+                    val id = Id.gentmp(type)
+                    val (result, resultType) = k(id)
+                    Pair(Let(IdWithType(id, type), kNormal, result), resultType)
+                }
+            }
+        }
+
+        fun conv(env: Env, s: Syntax): Pair<KNormal, Type> {
+            when (s) {
+                is Syntax.Unit -> Pair(Unit, Type.Primitive.Unit)
+                is Syntax.Bool -> Pair(Int(if (s.isValue) 1 else 0), Type.Primitive.Int)
+                is Syntax.Int-> Pair(Int(s.value), Type.Primitive.Int)
+                is Syntax.Float -> Pair(Float(s.value), Type.Primitive.Float)
+                is Syntax.Not -> conv(env, Syntax.If(s, Syntax.Bool(false), Syntax.Bool(true)))
+                is Syntax.Neg -> insertLet(conv(env, s)) { k ->
+                    Pair(Neg(k), Type.Primitive.Int)
+                }
+                is Syntax.Add -> insertLet(conv(env, s.left)) { l ->
+                    insertLet(conv(env, s.right)) { r ->
+                        Pair(Add(l, r), Type.Primitive.Int)
+                    }
+                }
+                is Syntax.Sub -> insertLet(conv(env, s.left)) { l ->
+                    insertLet(conv(env, s.right)) { r ->
+                        Pair(Sub(l, r), Type.Primitive.Int)
+                    }
+                }
+                is Syntax.FNeg -> insertLet(conv(env, s)) { k ->
+                    Pair(FNeg(k), Type.Primitive.Float)
+                }
+                is Syntax.FAdd -> insertLet(conv(env, s.left)) { l ->
+                    insertLet(conv(env, s.right)) { r ->
+                        Pair(FAdd(l, r), Type.Primitive.Float)
+                    }
+                }
+                is Syntax.FSub -> insertLet(conv(env, s.left)) { l ->
+                    insertLet(conv(env, s.right)) { r ->
+                        Pair(FSub(l, r), Type.Primitive.Float)
+                    }
+                }
+                is Syntax.FMul -> insertLet(conv(env, s.left)) { l ->
+                    insertLet(conv(env, s.right)) { r ->
+                        Pair(FMul(l, r), Type.Primitive.Float)
+                    }
+                }
+                is Syntax.FDiv -> insertLet(conv(env, s.left)) { l ->
+                    insertLet(conv(env, s.right)) { r ->
+                        Pair(FDiv(l, r), Type.Primitive.Float)
+                    }
+                }
+                is Syntax.Eq, is Syntax.LE -> conv(env, Syntax.If(s, Syntax.Bool(true), Syntax.Bool(false)))
+                is Syntax.If -> when (s.cond) {
+                    is Syntax.Not -> conv(env, Syntax.If(s.cond, s.falseExpr, s.trueExpr))
+                    is Syntax.Eq -> insertLet(conv(env, s.cond.left)) { l ->
+                        insertLet(conv(env, s.cond.right)) { r ->
+                            val (trueExpr, t) = conv(env, s.trueExpr)
+                            val (falseExpr, _) = conv(env, s.falseExpr)
+                            Pair(IfEq(l, r, trueExpr, falseExpr), t)
+                        }
+                    }
+                    is Syntax.LE -> insertLet(conv(env, s.cond.left)) { l ->
+                        insertLet(conv(env, s.cond.right)) { r ->
+                            val (trueExpr, t) = conv(env, s.trueExpr)
+                            val (falseExpr, _) = conv(env, s.falseExpr)
+                            Pair(IfLE(l, r, trueExpr, falseExpr), t)
+                        }
+                    }
+                    else -> conv(env, Syntax.If(Syntax.Eq(s.cond, Syntax.Bool(false)), s.falseExpr, s.trueExpr))
+                }
+            }
+        }
+    }
 }

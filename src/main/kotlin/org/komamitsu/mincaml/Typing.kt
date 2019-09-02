@@ -2,7 +2,6 @@ package org.komamitsu.mincaml
 
 import org.slf4j.LoggerFactory
 
-import java.util.HashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.stream.Collectors
 
@@ -17,21 +16,6 @@ class Typing internal constructor(syntax: Syntax) {
         unify(Type.Primitive.Unit, infer(Env(), syntax))
         extenv.updateValue(this::derefType)
         this.syntax = derefTerm(syntax)
-    }
-
-    private class Env : HashMap<Id, Type>() {
-        internal fun addList(xs: List<IdWithType>): Env {
-            for (x in xs) {
-                put(x.id, x.type)
-            }
-            return this
-        }
-
-        internal fun updateValue(f: (Type) -> Type) {
-            for (entry in entries) {
-                put(entry.key, f(entry.value))
-            }
-        }
     }
 
     private fun derefType(t: Type): Type {
