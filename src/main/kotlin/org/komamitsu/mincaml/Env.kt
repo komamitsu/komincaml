@@ -1,6 +1,8 @@
 package org.komamitsu.mincaml
 
 class Env : HashMap<Id, Type>() {
+    val ext = Env()
+
     internal fun addList(xs: List<IdWithType>): Env {
         for (x in xs) {
             put(x.id, x.type)

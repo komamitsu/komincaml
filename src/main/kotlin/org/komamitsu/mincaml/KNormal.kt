@@ -1,5 +1,7 @@
 package org.komamitsu.mincaml
 
+import java.lang.IllegalStateException
+
 
 data class FunDef(val name: IdWithType, val args: List<IdWithType>, val body: KNormal)
 
@@ -19,7 +21,7 @@ sealed class KNormal {
     data class IfLE(val left: Id, val right: Id, val trueExpr: KNormal, val falseExpr: KNormal) : KNormal()
     data class Let(val idWithType: IdWithType, val expr0: KNormal, val expr1: KNormal) : KNormal()
     data class Var(val id: Id) : KNormal()
-    data class LetRec(val funDef: FunDef) : KNormal()
+    data class LetRec(val funDef: FunDef, val expr: KNormal) : KNormal()
     data class App(val id: Id, val args: List<Id>) : KNormal()
     data class Tuple(val idList: List<Id>) : KNormal()
     data class LetTuple(val idWithTypeList: List<IdWithType>, val id: Id, val body: KNormal) : KNormal()
@@ -107,6 +109,53 @@ sealed class KNormal {
                         }
                     }
                     else -> conv(env, Syntax.If(Syntax.Eq(s.cond, Syntax.Bool(false)), s.falseExpr, s.trueExpr))
+                }
+                is Syntax.Let -> {
+                    val (e0, _) = conv(env, s.expr0)
+                    env[s.idWithType.id] = s.idWithType.type
+                    val (e1, t1) = conv(env, s.expr1)
+                    Pair(Let(s.idWithType, e0, e1), t1)
+                }
+                is Syntax.Var -> {
+                    if (env.contains(s.id)) {
+                        Pair(Var(s.id), env[s.id]!!)
+                    }
+                    else if (env.ext.contains(s.id)) {
+                        when (val t = env.ext[s.id]!!) {
+                            is Type.Array -> Pair(ExtArray(s.id), t)
+                            else -> throw IllegalStateException("External variable ${s.id} does not have an array type")
+                        }
+                    }
+                }
+                is Syntax.LetRec -> {
+                    env[s.funDef.idWithType.id] = s.funDef.idWithType.type
+                    val (e1, t1) = conv(env, s.expr)
+                    env.addList(s.funDef.args)
+                    val (e0, _) = conv(env, s.funDef.body)
+                    Pair(LetRec(FunDef(IdWithType(s.funDef.idWithType.id, s.funDef.idWithType.type), s.funDef.args, e0), e1), t1)
+                }
+                is Syntax.App -> {
+                    when {
+                        s.expr is Syntax.Var && !env.contains(s.expr.id) -> {
+                            when (val t = env.ext[s.expr.id]) {
+                                is Type.Fun -> {
+                                    fun bind(acc: List<Id>, xs: List<Syntax>): Pair<KNormal, Type> {
+                                        when {
+                                            xs.isEmpty() -> Pair(ExtFunApp(s.expr.id, acc), t)
+                                            else -> {
+                                                insertLet(conv(env, xs.first())) { id ->
+                                                    bind(acc + id, xs.takeLast(xs.size - 1))
+                                                }
+                                            }
+
+                                        }
+                                    }
+                                    bind(listOf(), s.args)
+                                }
+                            }
+                        }
+                        else ->
+                    }
                 }
             }
         }

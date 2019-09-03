@@ -9,12 +9,12 @@ class Typing internal constructor(syntax: Syntax) {
     companion object {
         private val LOGGER = LoggerFactory.getLogger(Typing::class.java)
     }
-    private val extenv = Env()
     private val syntax: Syntax
+    private val env = Env()
 
     init {
-        unify(Type.Primitive.Unit, infer(Env(), syntax))
-        extenv.updateValue(this::derefType)
+        unify(Type.Primitive.Unit, infer(env, syntax))
+        env.ext.updateValue(this::derefType)
         this.syntax = derefTerm(syntax)
     }
 
@@ -291,14 +291,14 @@ class Typing internal constructor(syntax: Syntax) {
                 if (env.containsKey(s.id)) {
                     return env[s.id]!!
                 }
-                if (extenv.containsKey(s.id)) {
-                    return extenv[s.id]!!
+                if (env.ext.containsKey(s.id)) {
+                    return env.ext[s.id]!!
                 }
                 LOGGER.warn(
                     String.format("Free variable %s assumed as external.", s.id)
                 )
                 val t = Type.Var()
-                extenv[s.id] = t
+                env.ext[s.id] = t
                 t
             }
             is Syntax.LetRec -> {
@@ -369,6 +369,6 @@ class Typing internal constructor(syntax: Syntax) {
     }
 
     override fun toString(): String {
-        return "Typing(extenv=$extenv, syntax=$syntax)"
+        return "Typing(env=$env, syntax=$syntax)"
     }
 }
