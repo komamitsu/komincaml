@@ -1,6 +1,7 @@
 package org.komamitsu.mincaml
 
 import java.lang.IllegalStateException
+import java.lang.RuntimeException
 
 
 data class FunDef(val name: IdWithType, val args: List<IdWithType>, val body: KNormal)
@@ -49,7 +50,7 @@ sealed class KNormal {
         }
 
         fun conv(env: Env, s: Syntax): Pair<KNormal, Type> {
-            when (s) {
+            return when (s) {
                 is Syntax.Unit -> Pair(Unit, Type.Primitive.Unit)
                 is Syntax.Bool -> Pair(Int(if (s.isValue) 1 else 0), Type.Primitive.Int)
                 is Syntax.Int-> Pair(Int(s.value), Type.Primitive.Int)
@@ -154,9 +155,10 @@ sealed class KNormal {
                                 }
                             }
                         }
-                        else ->
+                        else -> throw RuntimeException("Not implemented yet")
                     }
                 }
+                else -> throw RuntimeException("Not implemented yet")
             }
         }
     }
