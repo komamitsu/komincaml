@@ -1,31 +1,31 @@
-package org.komamitsu.mincaml
+package org.komamitsu.mincaml.truffle
 
 import com.oracle.truffle.api.CallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleFile
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.debug.DebuggerTags
-import com.oracle.truffle.api.dsl.ReportPolymorphism
+import com.oracle.truffle.api.dsl.TypeSystem
+import com.oracle.truffle.api.dsl.TypeSystemReference
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
-import com.oracle.truffle.api.instrumentation.InstrumentableNode
-import com.oracle.truffle.api.instrumentation.ProbeNode
 import com.oracle.truffle.api.instrumentation.ProvidedTags
 import com.oracle.truffle.api.instrumentation.StandardTags
-import com.oracle.truffle.api.interop.TruffleObject
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.NodeInfo
 import com.oracle.truffle.api.nodes.RootNode
 import org.antlr.v4.runtime.*
 import org.antlr.v4.runtime.atn.ATNConfigSet
 import org.antlr.v4.runtime.dfa.DFA
+import org.komamitsu.mincaml.MinCamlLexer
+import org.komamitsu.mincaml.MinCamlParser
 import java.nio.charset.Charset
-
 import java.util.BitSet
+
 
 class KMCContext(KMCLanguage: KMCLanguage, env: TruffleLanguage.Env)
 
-class MinCamlFileDetector : TruffleFile.FileTypeDetector {
+class KMCFileDetector : TruffleFile.FileTypeDetector {
     override fun findMimeType(file: TruffleFile): String? {
         return null
     }
@@ -35,24 +35,26 @@ class MinCamlFileDetector : TruffleFile.FileTypeDetector {
     }
 }
 
+@TypeSystem(Long::class)
+abstract class KMCTypes
+
+@TypeSystemReference(KMCTypes::class)
 @NodeInfo(language = "MinCaml", description = "The abstract base node for all MinCaml statements")
-//@GenerateWrapper
-@ReportPolymorphism
-abstract class KMCNode : Node(), InstrumentableNode {
+abstract class KMCNode : Node() {
     abstract fun executeGeneric(frame: VirtualFrame): Any
+
+    open fun executeLong(frame: VirtualFrame): Long {
+        return KMCTypesGen.expectLong(executeGeneric(frame))
+    }
 }
 
-class KMCDummyNode : KMCNode(), InstrumentableNode {
-    override fun isInstrumentable(): Boolean {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    override fun createWrapper(probe: ProbeNode?): InstrumentableNode.WrapperNode {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+class KMCNodeInteger(val value: Long) : KMCNode() {
+    override fun executeLong(frame: VirtualFrame): Long {
+        return value
     }
 
     override fun executeGeneric(frame: VirtualFrame): Any {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        return value
     }
 }
 
@@ -60,12 +62,11 @@ class KMCDummyNode : KMCNode(), InstrumentableNode {
 class KMCRootNode(
     language: KMCLanguage,
     frameDescriptor: FrameDescriptor,
-    /** The function body that is executed, and specialized during execution.  */
-    @field:Child private val bodyNode: KMCNode
+    @field:Child private var bodyNode: KMCNode
 ) : RootNode(language, frameDescriptor) {
 
     override fun execute(frame: VirtualFrame): Any {
-        assert(lookupContextReference(KMCLanguage::class.java!!).get() != null)
+        assert(lookupContextReference(KMCLanguage::class.java).get() != null)
         return bodyNode.executeGeneric(frame)
     }
 }
@@ -76,7 +77,7 @@ class KMCRootNode(
     defaultMimeType = KMCLanguage.MIME_TYPE,
     characterMimeTypes = arrayOf(KMCLanguage.MIME_TYPE),
     contextPolicy = TruffleLanguage.ContextPolicy.SHARED,
-    fileTypeDetectors = arrayOf(MinCamlFileDetector::class)
+    fileTypeDetectors = arrayOf(KMCFileDetector::class)
 )
 @ProvidedTags(
     StandardTags.CallTag::class,
@@ -95,12 +96,8 @@ class KMCLanguage : TruffleLanguage<KMCContext>() {
         return KMCContext(this, env)
     }
 
-    override fun isObjectOfLanguage(`object`: Any): Boolean {
-        return if (`object` !is TruffleObject) {
-            false
-        } else {
-            false
-        }
+    override fun isObjectOfLanguage(obj: Any): Boolean {
+        return false
     }
 
     override fun parse(request: ParsingRequest): CallTarget {
@@ -114,7 +111,11 @@ class KMCLanguage : TruffleLanguage<KMCContext>() {
 //        val root = parser.exp().accept<Any>(MinCamlSyntaxVisitor())
 //        val typing = MinCamlTyping(root)
 //        val rootNode = MinCamlRootNode(this, FrameDescriptor(), null)
-        val rootNode = KMCRootNode(this, FrameDescriptor(), KMCDummyNode())
+        val rootNode = KMCRootNode(
+            this,
+            FrameDescriptor(),
+            KMCNodeInteger(42)
+        )
         return Truffle.getRuntime().createCallTarget(rootNode)
     }
 
