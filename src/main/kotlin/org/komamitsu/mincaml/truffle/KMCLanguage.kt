@@ -2,74 +2,18 @@ package org.komamitsu.mincaml.truffle
 
 import com.oracle.truffle.api.CallTarget
 import com.oracle.truffle.api.Truffle
-import com.oracle.truffle.api.TruffleFile
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.debug.DebuggerTags
-import com.oracle.truffle.api.dsl.TypeSystem
-import com.oracle.truffle.api.dsl.TypeSystemReference
 import com.oracle.truffle.api.frame.FrameDescriptor
-import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.instrumentation.ProvidedTags
 import com.oracle.truffle.api.instrumentation.StandardTags
-import com.oracle.truffle.api.nodes.Node
-import com.oracle.truffle.api.nodes.NodeInfo
-import com.oracle.truffle.api.nodes.RootNode
 import org.antlr.v4.runtime.*
 import org.antlr.v4.runtime.atn.ATNConfigSet
 import org.antlr.v4.runtime.dfa.DFA
 import org.komamitsu.mincaml.MinCamlLexer
 import org.komamitsu.mincaml.MinCamlParser
-import java.nio.charset.Charset
 import java.util.BitSet
 
-
-class KMCContext(KMCLanguage: KMCLanguage, env: TruffleLanguage.Env)
-
-class KMCFileDetector : TruffleFile.FileTypeDetector {
-    override fun findMimeType(file: TruffleFile): String? {
-        return null
-    }
-
-    override fun findEncoding(file: TruffleFile): Charset? {
-        return null
-    }
-}
-
-@TypeSystem(Long::class)
-abstract class KMCTypes
-
-@TypeSystemReference(KMCTypes::class)
-@NodeInfo(language = "MinCaml", description = "The abstract base node for all MinCaml statements")
-abstract class KMCNode : Node() {
-    abstract fun executeGeneric(frame: VirtualFrame): Any
-
-    open fun executeLong(frame: VirtualFrame): Long {
-        return KMCTypesGen.expectLong(executeGeneric(frame))
-    }
-}
-
-class KMCNodeInteger(val value: Long) : KMCNode() {
-    override fun executeLong(frame: VirtualFrame): Long {
-        return value
-    }
-
-    override fun executeGeneric(frame: VirtualFrame): Any {
-        return value
-    }
-}
-
-@NodeInfo(language = "MinCaml", description = "The root of all MinCaml execution trees")
-class KMCRootNode(
-    language: KMCLanguage,
-    frameDescriptor: FrameDescriptor,
-    @field:Child private var bodyNode: KMCNode
-) : RootNode(language, frameDescriptor) {
-
-    override fun execute(frame: VirtualFrame): Any {
-        assert(lookupContextReference(KMCLanguage::class.java).get() != null)
-        return bodyNode.executeGeneric(frame)
-    }
-}
 
 @TruffleLanguage.Registration(
     id = KMCLanguage.ID,
@@ -114,7 +58,7 @@ class KMCLanguage : TruffleLanguage<KMCContext>() {
         val rootNode = KMCRootNode(
             this,
             FrameDescriptor(),
-            KMCNodeInteger(42)
+            KMCAddNodeFactory.create(KMCNodeInteger(42), KMCNodeInteger(57))
         )
         return Truffle.getRuntime().createCallTarget(rootNode)
     }
