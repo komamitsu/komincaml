@@ -6,7 +6,7 @@ import com.oracle.truffle.api.nodes.NodeInfo
 import com.oracle.truffle.api.nodes.RootNode
 
 @NodeInfo(language = "MinCaml", description = "The root of all MinCaml execution trees")
-class KMCRootNode(
+open class KMCRootNode(
     language: KMCLanguage,
     frameDescriptor: FrameDescriptor,
     @field:Child private var bodyNode: KMCNode
